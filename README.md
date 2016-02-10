@@ -59,12 +59,17 @@ This is *not* a fully C#-compliant compiler, and as such features may be missing
 [![E-iceblue](http://www.e-iceblue.com/components/com_affiliate/banners/3ca481a23a214e4c43b56861a904e189.gif)](http://www.e-iceblue.com/Spire.PDF/Spire.PDF-for-.NET.html?aff_id=96&amp;amp;banner_id=15)
 
 # PCL version
-This fork of charpeval is built as Portable Class Library, targeting
-* .NET Framework 4.5.1 and later
-* Windows 8.1 (and Windows Universal 10.0)
+This fork of charpeval is built as Portable Class Library (Profile111), targeting
+* .NET Framework 4.5 and later
+* Windows 8 and later
+* ASP.NET Core 5.0
 * Windows Phone 8.1
- 
- This means a breaking change from Ruperts orginal which works on .NET 4.0.
+* Xamarin.Android
+* Xamarin.IOS
+
+Note! I have only tested .NET Framework 4.5 and Windows Universal 10.0
+
+This is a breaking change compared to Ruperts orginal which works on .NET 4.0.
  
  
  
