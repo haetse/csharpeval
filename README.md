@@ -66,6 +66,5 @@ This fork of charpeval is built as Portable Class Library, targeting
  
  This means a breaking change from Ruperts orginal which works on .NET 4.0.
  
- Note! This version currently fails on one dynamic test.
  
  

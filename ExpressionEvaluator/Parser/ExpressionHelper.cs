@@ -343,7 +343,7 @@ namespace ExpressionEvaluator.Parser
 
         private static bool IsDynamic(Expression expr)
         {
-            return (expr.NodeType == ExpressionType.Dynamic) || expr.Type.IsDynamic() || (expr.NodeType == ExpressionType.Call && ((MethodCallExpression)expr).Method.ReturnType.GetTypeInfo().GetCustomAttributes(typeof(DynamicAttribute), true).ToArray().Length > 0);
+            return (expr.NodeType == ExpressionType.Dynamic) || expr.Type.IsDynamic() || (expr.NodeType == ExpressionType.Call && ((MethodCallExpression)expr).Method.ReturnParameter.GetCustomAttributes(typeof(DynamicAttribute), true).ToArray().Length > 0);
         }
 
         public static Expression GetProperty(Expression le, string membername)
