@@ -45,7 +45,7 @@ namespace ExpressionEvaluator.Parser
 
         private static Type[] GetTypesInNamespace(Assembly assembly, string nameSpace)
         {
-            return assembly.GetTypes().Where(t => String.Equals(t.Namespace, nameSpace, StringComparison.Ordinal)).ToArray();
+            return  assembly.DefinedTypes.Where(t => String.Equals(t.Namespace, nameSpace, StringComparison.Ordinal)).Select(t2 => t2.AsType()).ToArray();
         }
 
 
@@ -99,7 +99,7 @@ namespace ExpressionEvaluator.Parser
                 {
                     //•	If Ei is an anonymous function, an explicit parameter type inference (§7.5.2.7) is made from Ei to Ti
                 }
-                else if (parameters[i].ParameterType.IsValueType)
+                else if (parameters[i].ParameterType.GetTypeInfo().IsValueType)
                 {
                     //•	Otherwise, if Ei has a type U and xi is a value parameter then a lower-bound inference is made from U to Ti.
                 }
@@ -152,33 +152,30 @@ namespace ExpressionEvaluator.Parser
                 dynamic num = value;
                 if (@from == typeof(int))
                 {
-                    switch (Type.GetTypeCode(to))
-                    {
-                        case TypeCode.SByte:
-                            if (num >= SByte.MinValue && num <= SByte.MaxValue)
-                                canConv = true;
-                            break;
-                        case TypeCode.Byte:
-                            if (num >= Byte.MinValue && num <= Byte.MaxValue)
-                                canConv = true;
-                            break;
-                        case TypeCode.Int16:
-                            if (num >= Int16.MinValue && num <= Int16.MaxValue)
-                                canConv = true;
-                            break;
-                        case TypeCode.UInt16:
-                            if (num >= UInt16.MinValue && num <= UInt16.MaxValue)
-                                canConv = true;
-                            break;
-                        case TypeCode.UInt32:
-                            if (num >= UInt32.MinValue && num <= UInt32.MaxValue)
-                                canConv = true;
-                            break;
-                        case TypeCode.UInt64:
-                            if (num >= 0)
-                                canConv = true;
-                            break;
-                    }
+                   if (to == typeof(SByte))
+                        if (num >= SByte.MinValue && num <= SByte.MaxValue)
+                            canConv = true;
+                    else if (to == typeof(Byte))
+                        if (num >= Byte.MinValue && num <= Byte.MaxValue)
+                            canConv = true;
+                    else if (to == typeof(Int16))
+                        if (num >= Int16.MinValue && num <= Int16.MaxValue)
+                            canConv = true;
+                    else if (to == typeof(UInt16))
+                        if (num >= UInt16.MinValue && num <= UInt16.MaxValue)
+                            canConv = true;
+                    else if (to == typeof(Int32))
+                        if (num >= Int32.MinValue && num <= Int32.MaxValue)
+                            canConv = true;
+                    else if (to == typeof(UInt32))
+                        if (num >= UInt32.MinValue && num <= UInt32.MaxValue)
+                            canConv = true;
+                    else if (to == typeof(Int64))
+                        if (num >= Int64.MinValue && num <= Int64.MaxValue)
+                            canConv = true;
+                    else if (to == typeof(UInt64))
+                        if (num >= 0)
+                            canConv = true;
                 }
                 else if (@from == typeof(long))
                 {
@@ -226,14 +223,14 @@ namespace ExpressionEvaluator.Parser
             // implicit enumeration conversion 6.1.3
             long longTest = -1;
 
-            if (isLiteral && to.IsEnum && Int64.TryParse(value.ToString(), out longTest))
+            if (isLiteral && to.GetTypeInfo().IsEnum && Int64.TryParse(value.ToString(), out longTest))
             {
                 if (longTest == 0)
                     return true;
             }
 
             // implicit reference conversion 6.1.5
-            if (!@from.IsValueType && !to.IsValueType)
+            if (!@from.GetTypeInfo().IsValueType && !to.GetTypeInfo().IsValueType)
             {
                 bool? irc = ImpRefConv(value, @from, to);
                 if (irc.HasValue)
@@ -342,7 +339,7 @@ namespace ExpressionEvaluator.Parser
                             isMatch = false;
                         }
                     }
-                    else if (pInfo.GetCustomAttributes(typeof(ParamArrayAttribute), false).Length > 0)
+                    else if (pInfo.GetCustomAttributes(typeof(ParamArrayAttribute), false).ToArray().Length > 0)
                     { // Check ParamArray arguments
                         isParamArray = true;
 
@@ -462,12 +459,12 @@ namespace ExpressionEvaluator.Parser
 
         public static bool IsDelegate(Type t)
         {
-            return typeof(Delegate).IsAssignableFrom(t.BaseType);
+            return typeof(Delegate).GetTypeInfo().IsAssignableFrom(t.GetTypeInfo().BaseType.GetTypeInfo());
         }
 
         public static bool IsReferenceType(Type T)
         {
-            return T.IsArray || T.IsClass || T.IsInterface || IsDelegate(T);
+            return T.IsArray || T.GetTypeInfo().IsClass || T.GetTypeInfo().IsInterface || IsDelegate(T);
         }
 
         // 6.1.6 Implicit reference conversions
@@ -477,11 +474,11 @@ namespace ExpressionEvaluator.Parser
                 //•	From any reference-type to object and dynamic.
             (S.IsReferenceType() && T.IsDynamicOrObject()) ||
                 //•	From any class-type S to any class-type T, provided S is derived from T.
-            (S.IsClass && T.IsClass && S.IsDerivedFrom(T)) ||
+            (S.GetTypeInfo().IsClass && T.GetTypeInfo().IsClass && S.IsDerivedFrom(T)) ||
                 //•	From any class-type S to any interface-type T, provided S implements T.
-            (S.IsClass && T.IsInterface && S.Implements(T)) ||
+            (S.GetTypeInfo().IsClass && T.GetTypeInfo().IsInterface && S.Implements(T)) ||
                 //•	From any interface-type S to any interface-type T, provided S is derived from T.
-            (S.IsInterface && T.IsInterface && S.IsDerivedFrom(T)) ||
+            (S.GetTypeInfo().IsInterface && T.GetTypeInfo().IsInterface && S.IsDerivedFrom(T)) ||
                 //•	From an array-type S with an element type SE to an array-type T with an element type TE, provided all of the following are true:
                 //o	S and T differ only in element type. In other words, S and T have the same number of dimensions.
                 //o	Both SE and TE are reference-types.
@@ -509,7 +506,7 @@ namespace ExpressionEvaluator.Parser
 
             //The implicit reference conversions are those conversions between reference-types that can be proven to always succeed, and therefore require no checks at run-time.
 
-            S.IsClass && T.IsInterface && S.IsGenericType && S.GetGenericTypeDefinition().Implements(T);
+            S.GetTypeInfo().IsClass && T.GetTypeInfo().IsInterface && S.GetTypeInfo().IsGenericType && S.GetGenericTypeDefinition().Implements(T);
 
             //Reference conversions, implicit or explicit, never change the referential identity of the object being converted. In other words, while a reference conversion may change the type of the reference, it never changes the type or value of the object being referred to.
         }
@@ -527,7 +524,7 @@ namespace ExpressionEvaluator.Parser
 
         public static bool HasImplicitBoxingConversions(Expression E, Type T2)
         {
-            if (E.Type.IsValueType)
+            if (E.Type.GetTypeInfo().IsValueType)
             {
                 if (T2 == typeof (object))
                 {
@@ -659,7 +656,7 @@ namespace ExpressionEvaluator.Parser
             ParameterInfo currentParameter = null;
 
             ParameterInfo paramArrayParameter =
-                parameters.FirstOrDefault(p => p.GetCustomAttributes(typeof(ParamArrayAttribute), false).Length > 0);
+                parameters.FirstOrDefault(p => p.GetCustomAttributes(typeof(ParamArrayAttribute), false).ToArray().Length > 0);
 
             for (int i = 0; i < argCount; i++)
             {
@@ -864,7 +861,7 @@ namespace ExpressionEvaluator.Parser
 
             else if (value == null)
                 // null literal -> Ref-type
-                success = !to.IsValueType;
+                success = !to.GetTypeInfo().IsValueType;
 
             else if (false)
                 // ref -> dynamic (6.1.8)
@@ -875,7 +872,7 @@ namespace ExpressionEvaluator.Parser
             {
                 // Array-type -> Array-type
                 bool sameRank = (@from.GetArrayRank() == to.GetArrayRank());
-                bool bothRef = (!@from.GetElementType().IsValueType && !to.GetElementType().IsValueType);
+                bool bothRef = (!@from.GetElementType().GetTypeInfo().IsValueType && !to.GetElementType().GetTypeInfo().IsValueType);
                 bool? impConv = ImpRefConv(value, @from.GetElementType(), to.GetElementType());
                 success = (sameRank && bothRef && impConv.GetValueOrDefault(false));
             }
@@ -885,10 +882,10 @@ namespace ExpressionEvaluator.Parser
             {
 
                 //if ( fromArg.GetType().Name.Equals(to.Name)) {
-                if (to.GenericParameterAttributes != GenericParameterAttributes.None)
+                if (to.GetTypeInfo().GenericParameterAttributes != GenericParameterAttributes.None)
                 {
 
-                    if ((int)(to.GenericParameterAttributes & GenericParameterAttributes.ReferenceTypeConstraint) != 0)
+                    if ((int)(to.GetTypeInfo().GenericParameterAttributes & GenericParameterAttributes.ReferenceTypeConstraint) != 0)
                     {
                         ;
                     }
@@ -905,12 +902,12 @@ namespace ExpressionEvaluator.Parser
             }
 
                 // Boxing Conversions (6.1.7)
-            else if (@from.IsValueType && !to.IsValueType)
+            else if (@from.GetTypeInfo().IsValueType && !to.GetTypeInfo().IsValueType)
             {
                 return IsBoxingConversion(@from, to);
             }
 
-            else if ((@from.IsClass && to.IsClass) || (@from.IsClass && to.IsInterface) || (@from.IsInterface && to.IsInterface))
+            else if ((@from.GetTypeInfo().IsClass && to.GetTypeInfo().IsClass) || (@from.GetTypeInfo().IsClass && to.GetTypeInfo().IsInterface) || (@from.GetTypeInfo().IsInterface && to.GetTypeInfo().IsInterface))
                 // class -> class  OR  class -> interface  OR  interface -> interface
                 success = CrawlThatShit(to.GetHashCode(), @from, new List<int>());
 
@@ -920,7 +917,7 @@ namespace ExpressionEvaluator.Parser
                 return true;
             }
 
-            else if (@from.IsArray && @from.GetArrayRank() == 1 && to.IsGenericType && CrawlThatShit(to.GetHashCode(), typeof(IList<>), new List<int>()))
+            else if (@from.IsArray && @from.GetArrayRank() == 1 && to.GetTypeInfo().IsGenericType && CrawlThatShit(to.GetHashCode(), typeof(IList<>), new List<int>()))
                 // Single dim array -> IList<>
                 success = ImpRefConv(value, @from.GetElementType(), to.GetGenericTypeDefinition());
 
@@ -956,24 +953,21 @@ namespace ExpressionEvaluator.Parser
             bool found = (curHashCode == target);
             visitedTypes.Add(curHashCode);
 
-            if (!found && current.BaseType != null)
+            if (!found && current.GetTypeInfo().BaseType != null)
             {
-                found = CrawlThatShit(target, current.BaseType, visitedTypes);
+                found = CrawlThatShit(target, current.GetTypeInfo().BaseType, visitedTypes);
             }
 
             if (!found)
             {
-                if (current.GetInterfaces() != null)
+                foreach (Type iface in current.GetTypeInfo().ImplementedInterfaces)
                 {
-                    foreach (Type iface in current.GetInterfaces())
+                    if (CrawlThatShit(target, iface, visitedTypes))
                     {
-                        if (CrawlThatShit(target, iface, visitedTypes))
-                        {
-                            found = true;
-                            break;
-                        }
-
+                        found = true;
+                        break;
                     }
+
                 }
             }
 
@@ -991,7 +985,7 @@ namespace ExpressionEvaluator.Parser
         ///
         public static bool IsNullableType(Type t)
         {
-            return t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>);
+            return t.GetTypeInfo().IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>);
         }
 
         ///
@@ -1021,7 +1015,7 @@ namespace ExpressionEvaluator.Parser
                 return true;
             }
 
-            if (@from.IsEnum && to == typeof(Enum))
+            if (@from.GetTypeInfo().IsEnum && to == typeof(Enum))
             {
                 return true;
             }
@@ -1033,18 +1027,18 @@ namespace ExpressionEvaluator.Parser
             // Find members that match on name
             var results = GetMethodInfos(type, membername);
 
-            if (type.IsInterface)
+            if (type.GetTypeInfo().IsInterface)
             {
-                foreach (var iinterface in type.GetInterfaces())
+                foreach (var iinterface in type.GetTypeInfo().ImplementedInterfaces)
                 {
                     results.AddRange(GetMethodInfos(iinterface, membername));
                 }
             }
 
             // Traverse through class hierarchy
-            while (type != typeof(object) && type.BaseType != null)
+            while (type != typeof(object) && type.GetTypeInfo().BaseType != null)
             {
-                type = type.BaseType;
+                type = type.GetTypeInfo().BaseType;
                 results.AddRange(GetMethodInfos(type, membername));
             }
 
@@ -1054,18 +1048,9 @@ namespace ExpressionEvaluator.Parser
         private static Func<MethodInfo, bool> IsVirtual = (mi) => (mi.Attributes & MethodAttributes.Virtual) != 0;
         private static Func<MethodInfo, bool> HasVTable = (mi) => (mi.Attributes & MethodAttributes.VtableLayoutMask) != 0;
 
-        private static BindingFlags findFlags = BindingFlags.NonPublic |
-                                                BindingFlags.Public |
-                                                BindingFlags.Static |
-                                                BindingFlags.Instance |
-                                                BindingFlags.InvokeMethod |
-                                                BindingFlags.OptionalParamBinding |
-                                                BindingFlags.DeclaredOnly;
-
-
         public static List<MethodInfo> GetMethodInfos(Type env, string memberName)
         {
-            return env.GetMethods(findFlags).Where(mi => mi.Name == memberName && (!IsVirtual(mi) || HasVTable(mi))).ToList();
+            return env.GetTypeInfo().DeclaredMethods.Where(mi => mi.Name == memberName && (!IsVirtual(mi) || HasVTable(mi))).ToList();
         }
     }
 }

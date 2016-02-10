@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Dynamic;
 using System.Linq;
+using System.Reflection;
 
 namespace ExpressionEvaluator.Parser
 {
@@ -30,28 +31,28 @@ namespace ExpressionEvaluator.Parser
 
         public static bool IsDynamicOrObject(this Type type)
         {
-            return type.GetInterfaces().Contains(typeof(IDynamicMetaObjectProvider)) ||
+            return type.GetTypeInfo().ImplementedInterfaces.Contains(typeof(IDynamicMetaObjectProvider)) ||
                    type == typeof(Object);
         }
 
         public static bool IsDelegate(this Type t)
         {
-            return typeof(Delegate).IsAssignableFrom(t.BaseType);
+            return typeof(Delegate).GetTypeInfo().IsAssignableFrom(t.GetTypeInfo().BaseType.GetTypeInfo());
         }
 
         public static bool IsReferenceType(this Type T)
         {
-            return T.IsArray || T.IsClass || T.IsInterface || T.IsDelegate();
+            return T.IsArray || T.GetTypeInfo().IsClass || T.GetTypeInfo().IsInterface || T.IsDelegate();
         }
 
         public static bool IsDerivedFrom(this Type T, Type superClass)
         {
-            return superClass.IsAssignableFrom(T);
+            return superClass.GetTypeInfo().IsAssignableFrom(T.GetTypeInfo());
         }
 
         public static bool Implements(this Type T, Type interfaceType)
         {
-            return T.GetInterfaces().Any(x =>
+            return T.GetTypeInfo().ImplementedInterfaces.Any(x =>
             {
                 return x.Name == interfaceType.Name;
             });
@@ -67,7 +68,7 @@ namespace ExpressionEvaluator.Parser
 
         public static bool IsDynamic(this Type type)
         {
-            return type.GetInterfaces().Contains(typeof(IDynamicMetaObjectProvider));
+            return type.GetTypeInfo().ImplementedInterfaces.Contains(typeof(IDynamicMetaObjectProvider));
         }
 
         public static bool IsObject(this Type type)

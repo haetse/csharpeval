@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using ExpressionEvaluator.Parser;
+using System.Reflection;
 
 namespace ExpressionEvaluator
 {
@@ -56,7 +57,7 @@ namespace ExpressionEvaluator
             //    throw new InvalidOperationException(typeof(T).Name + " is not a delegate type");
             //}
 
-            var argTypes = f.GetGenericArguments();
+            var argTypes = f.GenericTypeArguments;
             var argParams = parameters.Select((t, i) => Expression.Parameter(argTypes[i], t)).ToList();
             Parser.ExternalParameters = argParams;
             Expression = BuildTree();
@@ -95,9 +96,9 @@ namespace ExpressionEvaluator
             }
 
             // If we are passing in a Func<>, the first argument is the Scope type, the second argument is the return type
-            if (returnType.IsGenericType)
+            if (returnType.GetTypeInfo().IsGenericType)
             {
-                var typeargs = returnType.GetGenericArguments();
+                var typeargs = returnType.GenericTypeArguments;
                 returnType = typeargs[typeargs.Count() - 1];
             }
 
@@ -119,9 +120,9 @@ namespace ExpressionEvaluator
             }
 
             // If we are passing in a Func<>, the first argument is the Scope type, the second argument is the return type
-            if (returnType.IsGenericType)
+            if (returnType.GetTypeInfo().IsGenericType)
             {
-                var typeargs = returnType.GetGenericArguments();
+                var typeargs = returnType.GenericTypeArguments;
                 returnType = typeargs[typeargs.Count() - 1];
             }
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using Converter = System.Convert;
+using System.Reflection;
 
 namespace ExpressionEvaluator.Parser
 {
@@ -184,7 +185,7 @@ namespace ExpressionEvaluator.Parser
             else
             {
                 if (@from == to) return 0;
-                if (to.IsAssignableFrom(@from)) return 1;
+                if (to.GetTypeInfo().IsAssignableFrom(@from.GetTypeInfo())) return 1;
             }
             return -1;
         }
@@ -211,7 +212,7 @@ namespace ExpressionEvaluator.Parser
 
         public static bool BoxingConversion(ref Expression src, Type destType)
         {
-            if (src.Type.IsValueType && !src.Type.IsNullable() && destType.IsDynamicOrObject())
+            if (src.Type.GetTypeInfo().IsValueType && !src.Type.IsNullable() && destType.IsDynamicOrObject())
             {
                 src = Expression.Convert(src, destType);
                 return true;
@@ -252,7 +253,7 @@ namespace ExpressionEvaluator.Parser
 
         public static Expression EnumConversion(ref Expression src)
         {
-            if (typeof(Enum).IsAssignableFrom(src.Type))
+            if (typeof(Enum).GetTypeInfo().IsAssignableFrom(src.Type.GetTypeInfo()))
             {
                 return Expression.Convert(src, Enum.GetUnderlyingType(src.Type));
             }

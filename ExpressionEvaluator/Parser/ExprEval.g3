@@ -26,6 +26,7 @@ using System;
 using System.Linq;
 using System.Linq.Expressions;
 using ExpressionEvaluator.Parser.Expressions;
+using System.Reflection;
 }
 
 @lexer::members {
@@ -1362,9 +1363,9 @@ public foreach_statement returns [Expression value]
 
 		if(typeName == "var")
 		{
-            if ($expression.value.Type.IsGenericType)
+            if ($expression.value.Type.GetTypeInfo().IsGenericType)
             {
-                type = $expression.value.Type.GetGenericArguments()[0];
+                type = $expression.value.Type.GetTypeInfo().GenericTypeArguments[0];
             }
 			else if ($expression.value.Type.IsArray)
 			{

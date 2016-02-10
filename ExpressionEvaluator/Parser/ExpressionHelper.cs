@@ -30,7 +30,7 @@ namespace ExpressionEvaluator.Parser
             {
                 if (le.Type != typeof(string)) le = ConvertToString(le);
                 if (re.Type != typeof(string)) re = ConvertToString(re);
-                return Expression.Add(le, re, StringType.GetMethod("Concat", new Type[] { le.Type, re.Type }));
+                return Expression.Add(le, re, StringType.GetTypeInfo().GetDeclaredMethod("Concat"));
             }
             return Expression.Add(le, re);
         }
@@ -66,40 +66,58 @@ namespace ExpressionEvaluator.Parser
                     expArgs.Select(x => CSharpArgumentInfo.Create(CSharpArgumentInfoFlags.None, null))
                     );
 
-                return Expression.Dynamic(indexedBinder, typeof(object), expArgs);
+                return DynamicExpression.Dynamic(indexedBinder, typeof(object), expArgs);
 
             }
             else
             {
-                if (type.BaseType == typeof(System.Array))
+                
+                if (type.GetTypeInfo().BaseType == typeof(System.Array))
                 {
                     return Expression.ArrayAccess(le, args);
                 }
 
-                var defaultMembers = type.GetCustomAttributes(typeof(DefaultMemberAttribute), true);
+                var defaultMembers = type.GetTypeInfo().GetCustomAttributes(typeof(DefaultMemberAttribute), true);
 
-                if (defaultMembers.Length > 0)
+                foreach (var defaultMember in defaultMembers)
                 {
-                    foreach (var defaultMember in defaultMembers)
+                    // Same as
+                    // var pi = type.GetProperty(((DefaultMemberAttribute)defaultMember).MemberName, args.Select(x => x.Type).ToArray());
+                    var pi = type.GetTypeInfo().DeclaredProperties.Where(p => p.Name == ((DefaultMemberAttribute)defaultMember).MemberName).Where(p =>
                     {
-                        var pi = type.GetProperty(((DefaultMemberAttribute)defaultMember).MemberName, args.Select(x => x.Type).ToArray());
-
-                        if (pi == null)
+                        var expectedArgs = args.Select(x => x.Type).ToArray();
+                        var propArgs = p.GetIndexParameters().Select(q => q.ParameterType).ToArray();
+                        if(propArgs.Length == expectedArgs.Length)
                         {
-                            throw new CompilerException(string.Format("No default member found on type '{0}' that matches the given arguments", type.Name));
+                            for(int i=0;i<expectedArgs.Length;i++)
+                            {
+                                if (propArgs[i] != expectedArgs[i])
+                                    return false;
+                            }
+                            return true;
                         }
+                        return false;
+                    }).First();
 
-                        return Expression.Property(le, pi, args);
+
+
+
+
+
+                    if (pi == null)
+                    {
+                        throw new CompilerException(string.Format("No default member found on type '{0}' that matches the given arguments", type.Name));
                     }
+
+                    return Expression.Property(le, pi, args);
                 }
 
-
-                var interfaces = le.Type.GetInterfaces();
+                var interfaces = le.Type.GetTypeInfo().ImplementedInterfaces;
 
                 foreach (var @interface in interfaces)
                 {
 
-                    foreach (PropertyInfo pi in @interface.GetProperties())
+                    foreach (PropertyInfo pi in @interface.GetTypeInfo().DeclaredProperties)
                     {
                         var indexParameters = pi.GetIndexParameters();
 
@@ -145,7 +163,7 @@ namespace ExpressionEvaluator.Parser
                 //}
 
                 // Alternative, note that we could even look for the type of parameters, if there are indexer overloads.
-                PropertyInfo indexerpInfo = (from p in le.Type.GetDefaultMembers().OfType<PropertyInfo>()
+                PropertyInfo indexerpInfo = (from p in le.Type.GetTypeInfo().DeclaredMembers.Where(m => m.Name == le.Type.GetTypeInfo().GetCustomAttribute<DefaultMemberAttribute>().MemberName).OfType<PropertyInfo>()
                                                  // This check is probably useless. You can't overload on return value in C#.
                                              where p.PropertyType == typeof(int)
                                              let q = p.GetIndexParameters()
@@ -203,8 +221,7 @@ namespace ExpressionEvaluator.Parser
                         }
                     );
 
-                return Expression.Dynamic(binder, typeof(object), instance, re);
-
+                return DynamicExpression.Dynamic(binder, typeof(object), instance, re);
             }
 
             TypeConversion.ImplicitConversion(ref re, le.Type);
@@ -238,7 +255,7 @@ namespace ExpressionEvaluator.Parser
                     // An explicit argument type inference is made from an expression e with type T in the following way:
                     // If e is an explicitly typed lambda expression or anonymous method with argument types U1...Uk and T is a delegate type with parameter types V1...Vk then for each Ui an exact inference (§26.3.3.8) is made from Ui for the corresponding Vi.
 
-                    var x = lambda.Parameters.Select(p => p.Type).Zip(Ti.GetGenericArguments(), (type, type1) =>
+                    var x = lambda.Parameters.Select(p => p.Type).Zip(Ti.GetTypeInfo().GenericTypeArguments, (type, type1) =>
                         {
                             ExactInference(type, type1, lookup);
                             return 1;
@@ -303,8 +320,8 @@ namespace ExpressionEvaluator.Parser
             if ((U.IsArray && V.IsArray && U.GetArrayRank() == V.GetArrayRank() ||
                  // or if U is a one-dimensional array type Ue[]and V is one of IEnumerable<Ve>, ICollection<Ve> or IList<Ve> then:
                  U.IsArray && U.GetArrayRank() == 1 &&
-                 (V.IsAssignableFrom(typeof(IEnumerable<>)) || V.IsAssignableFrom(typeof(ICollection<>)) ||
-                  V.IsAssignableFrom(typeof(IList<>)))
+                 (V.GetTypeInfo().IsAssignableFrom(typeof(IEnumerable<>).GetTypeInfo()) || V.GetTypeInfo().IsAssignableFrom(typeof(ICollection<>).GetTypeInfo()) ||
+                  V.GetTypeInfo().IsAssignableFrom(typeof(IList<>).GetTypeInfo()))
                 ))
             {
                 //If Ue is known to be a reference type then a lower-bound inference from Ue to Ve is made.
@@ -312,9 +329,9 @@ namespace ExpressionEvaluator.Parser
                 //Otherwise, an exact inference from Ue to Ve is made.
             }
             //Otherwise if V is a constructed type C<V1...Vk> and there is a unique set of types U1...Uk such that a standard implicit conversion exists from U to C<U1...Uk> then an exact inference is made from each Ui for the corresponding Vi.
-            if (V.IsGenericType && U.IsGenericType)
+            if (V.GetTypeInfo().IsGenericType && U.GetTypeInfo().IsGenericType)
             {
-                var x = U.GetGenericArguments().Zip(V.GetGenericArguments(), (type, type1) =>
+                var x = U.GetTypeInfo().GenericTypeArguments.Zip(V.GetTypeInfo().GenericTypeArguments, (type, type1) =>
                     {
                         ExactInference(type, type1, lookup);
                         return 1;
@@ -326,7 +343,7 @@ namespace ExpressionEvaluator.Parser
 
         private static bool IsDynamic(Expression expr)
         {
-            return (expr.NodeType == ExpressionType.Dynamic) || expr.Type.IsDynamic() || (expr.NodeType == ExpressionType.Call && ((MethodCallExpression)expr).Method.ReturnTypeCustomAttributes.GetCustomAttributes(typeof(DynamicAttribute), true).Length > 0);
+            return (expr.NodeType == ExpressionType.Dynamic) || expr.Type.IsDynamic() || (expr.NodeType == ExpressionType.Call && ((MethodCallExpression)expr).Method.ReturnType.GetTypeInfo().GetCustomAttributes(typeof(DynamicAttribute), true).ToArray().Length > 0);
         }
 
         public static Expression GetProperty(Expression le, string membername)
@@ -354,7 +371,7 @@ namespace ExpressionEvaluator.Parser
 
                 if (!isDynamic)
                 {
-                    var prop = type.GetProperty(membername);
+                    var prop = type.GetTypeInfo().GetDeclaredProperty(membername);
                     if (prop != null)
                     {
                         if (prop.GetCustomAttributes(false).Any(x => x.GetType() == typeof(DynamicAttribute)))
@@ -364,7 +381,7 @@ namespace ExpressionEvaluator.Parser
                     }
                     else
                     {
-                        var fieldInfo = type.GetField(membername);
+                        var fieldInfo = type.GetTypeInfo().GetDeclaredField(membername);
                         if (fieldInfo != null)
                         {
                             if (fieldInfo.GetCustomAttributes(false).Any(x => x.GetType() == typeof(DynamicAttribute)))
@@ -386,7 +403,7 @@ namespace ExpressionEvaluator.Parser
                     new[] { CSharpArgumentInfo.Create(CSharpArgumentInfoFlags.None, null) }
                     );
 
-                Expression result = Expression.Dynamic(binder, typeof(object), instance);
+                Expression result = DynamicExpression.Dynamic(binder, typeof(object), instance);
 
                 return result;
             }
@@ -394,7 +411,7 @@ namespace ExpressionEvaluator.Parser
             {
                 Expression exp = null;
 
-                var propertyInfo = type.GetProperty(membername);
+                var propertyInfo = type.GetTypeInfo().GetDeclaredProperty(membername);
                 if (propertyInfo != null)
                 {
                     exp = Expression.Property(instance, propertyInfo);
@@ -408,7 +425,7 @@ namespace ExpressionEvaluator.Parser
                 }
                 else
                 {
-                    var fieldInfo = type.GetField(membername);
+                    var fieldInfo = type.GetTypeInfo().GetDeclaredField(membername);
                     if (fieldInfo != null)
                     {
                         exp = Expression.Field(instance, fieldInfo);
@@ -431,7 +448,7 @@ namespace ExpressionEvaluator.Parser
             var isRuntimeType = false;
 
             var membername = member.Identifier;
-            if (typeof(Type).IsAssignableFrom(le.Type))
+            if (typeof(Type).GetTypeInfo().IsAssignableFrom(le.Type.GetTypeInfo()))
             {
                 isRuntimeType = true;
                 type = ((Type)((ConstantExpression)le).Value);
@@ -459,7 +476,7 @@ namespace ExpressionEvaluator.Parser
                         expArgs.Select(x => CSharpArgumentInfo.Create(CSharpArgumentInfoFlags.None, null))
                         );
 
-                    return Expression.Dynamic(binderMC, typeof(void), expArgs);
+                    return DynamicExpression.Dynamic(binderMC, typeof(void), expArgs);
                 }
 
                 var binderM = Binder.InvokeMember(
@@ -470,7 +487,7 @@ namespace ExpressionEvaluator.Parser
                     expArgs.Select(x => CSharpArgumentInfo.Create(CSharpArgumentInfoFlags.None, null))
                     );
 
-                return Expression.Dynamic(binderM, typeof(object), expArgs);
+                return DynamicExpression.Dynamic(binderM, typeof(object), expArgs);
             }
             else
             {
@@ -523,7 +540,7 @@ namespace ExpressionEvaluator.Parser
                 var parameterInfos = applicableMemberFunction.Member.GetParameters();
                 var argExps = args.Select(x => x.Expression).ToList();
 
-                ParameterInfo paramArrayParameter = parameterInfos.FirstOrDefault(p => p.GetCustomAttributes(typeof(ParamArrayAttribute), false).Length > 0);
+                ParameterInfo paramArrayParameter = parameterInfos.FirstOrDefault(p => p.GetCustomAttributes(typeof(ParamArrayAttribute), false).ToArray().Length > 0);
                 List<Expression> newArgs2 = null;
 
                 if (member.TypeArgs != null)
@@ -554,7 +571,7 @@ namespace ExpressionEvaluator.Parser
 
                     if (targetType == null)
                     {
-                        var ga = paramArrayParameter.ParameterType.GetGenericArguments();
+                        var ga = paramArrayParameter.ParameterType.GenericTypeArguments;
                         if (ga.Any())
                         {
                             targetType = ga.Single();
@@ -571,7 +588,7 @@ namespace ExpressionEvaluator.Parser
                 else
                 {
                     newArgs2 = argExps.ToList();
-                    var typeArgCount = parameterInfos.Count(x => x.ParameterType.IsGenericParameter || x.ParameterType.IsGenericType && x.ParameterType.GetGenericArguments().Any(y => y.IsGenericParameter));
+                    var typeArgCount = parameterInfos.Count(x => x.ParameterType.IsGenericParameter || x.ParameterType.GetTypeInfo().IsGenericType && x.ParameterType.GenericTypeArguments.Any(y => y.IsGenericParameter));
                     if (typeArgs == null && typeArgCount > 0) typeArgs = new Type[typeArgCount];
 
                     for (var i = 0; i < parameterInfos.Length; i++)
@@ -581,9 +598,9 @@ namespace ExpressionEvaluator.Parser
                             var genericParameterPosition = parameterInfos[i].ParameterType.GenericParameterPosition;
                             typeArgs[genericParameterPosition] = newArgs2[i].Type;
                         }
-                        if (parameterInfos[i].ParameterType.IsGenericType)
+                        if (parameterInfos[i].ParameterType.GetTypeInfo().IsGenericType)
                         {
-                            var genericArgs = parameterInfos[i].ParameterType.GetGenericArguments();
+                            var genericArgs = parameterInfos[i].ParameterType.GenericTypeArguments;
                             var genericArgParameters = genericArgs.Where(y => y.IsGenericParameter).ToList();
                             if (genericArgParameters.Any())
                             {
@@ -948,7 +965,7 @@ namespace ExpressionEvaluator.Parser
                             for (i = 0; jx + 2 + i < txt.Length && i < 4; i++)
                             {
                                 var chr = txt[jx + 2 + i];
-                                if (HexChars.Contains(chr))
+                                if (HexChars.Contains(chr.ToString()))
                                 {
                                     unicode = unicode + chr;
                                 }
@@ -972,7 +989,7 @@ namespace ExpressionEvaluator.Parser
                             while (jx + 2 + i < txt.Length)
                             {
                                 var chr = txt[jx + 2 + i];
-                                if (HexChars.Contains(chr))
+                                if (HexChars.Contains(chr.ToString()))
                                 {
                                     hex = hex + chr;
                                 }
@@ -1235,7 +1252,7 @@ namespace ExpressionEvaluator.Parser
                                                         CSharpArgumentInfo.Create(CSharpArgumentInfoFlags.None, null)
                                                     });
 
-            return Expression.Dynamic(binderM, typeof(object), expArgs);
+            return DynamicExpression.Dynamic(binderM, typeof(object), expArgs);
         }
 
         private static Expression DynamicBinaryOperator(Expression le, Expression re, ExpressionType expressionType)
@@ -1250,7 +1267,7 @@ namespace ExpressionEvaluator.Parser
                                                          CSharpArgumentInfo.Create(CSharpArgumentInfoFlags.None, null)
                                                      });
 
-            return Expression.Dynamic(binderM, typeof(object), expArgs);
+            return DynamicExpression.Dynamic(binderM, typeof(object), expArgs);
         }
 
 
@@ -1266,7 +1283,7 @@ namespace ExpressionEvaluator.Parser
                                                         CSharpArgumentInfo.Create(CSharpArgumentInfoFlags.None, null),
                                                     });
 
-                condition = Expression.Dynamic(binderM, typeof(bool), expArgs);
+                condition = DynamicExpression.Dynamic(binderM, typeof(bool), expArgs);
             }
 
             TypeConversion.ImplicitConversion(ref condition, typeof(bool));
@@ -1280,7 +1297,7 @@ namespace ExpressionEvaluator.Parser
 
             if (arguments == null)
             {
-                var p = t.GetConstructors();
+                var p = t.GetTypeInfo().DeclaredConstructors;
                 constructorInfo = p.First(x => !x.GetParameters().Any());
 
                 IEnumerable<MemberInfo> memberInfos = null;
@@ -1295,7 +1312,26 @@ namespace ExpressionEvaluator.Parser
             }
             else
             {
-                constructorInfo = t.GetConstructor(arguments.Select(arg => arg.Expression.Type).ToArray());
+
+
+                // Same as
+               // constructorInfo = t.GetConstructor(arguments.Select(arg => arg.Expression.Type).ToArray());
+
+               constructorInfo = t.GetTypeInfo().DeclaredConstructors.Where(ci =>
+               {
+                   var expectedArgs = arguments.Select(arg => arg.Expression.Type).ToArray();
+                   var typeArgs = ci.GetParameters().Select(arg => arg.ParameterType).ToArray();
+                   if (expectedArgs.Length == typeArgs.Length)
+                   {
+                       for (int i = 0; i < expectedArgs.Length; i++)
+                       {
+                           if (expectedArgs[i] != typeArgs[i])
+                               return false;
+                       }
+                       return true;
+                   }
+                   return false;
+               }).First();
 
                 IEnumerable<MemberInfo> memberInfos = null;
                 if (memberInfos == null)

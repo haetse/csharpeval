@@ -495,7 +495,8 @@ private bool EvaluatePredicate(System.Action fragment)
 	}
 	catch ( RecognitionException re )
 	{
-		System.Console.Error.WriteLine("impossible: "+re);
+	    throw;
+		// System.Console.Error.WriteLine("impossible: "+re);
 	}
 	success = !state.failed;
 	input.Rewind(start);

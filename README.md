@@ -57,3 +57,15 @@ Expression Evaluator is 100% free, but if you would like to support the project 
 This is *not* a fully C#-compliant compiler, and as such features may be missing and there may be bugs or discrepancies in how the parser and compiler work.  If you wish to use this library in production code do so at your own risk.
 
 [![E-iceblue](http://www.e-iceblue.com/components/com_affiliate/banners/3ca481a23a214e4c43b56861a904e189.gif)](http://www.e-iceblue.com/Spire.PDF/Spire.PDF-for-.NET.html?aff_id=96&amp;amp;banner_id=15)
+
+# PCL version
+This fork of charpeval is built as Portable Class Library, targeting
+* .NET Framework 4.5.1 and later
+* Windows 8.1 (and Windows Universal 10.0)
+* Windows Phone 8.1
+ 
+ This means a breaking change from Ruperts orginal which works on .NET 4.0.
+ 
+ Note! This version currently fails on one dynamic test.
+ 
+ 

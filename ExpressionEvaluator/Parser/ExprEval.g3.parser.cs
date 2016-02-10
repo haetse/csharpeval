@@ -154,7 +154,7 @@ namespace ExpressionEvaluator.Parser
         public override void ReportError(RecognitionException e)
         {
             base.ReportError(e);
-            string message;
+            string message;   
             if (e.GetType() == typeof(MismatchedTokenException))
             {
                 var ex = (MismatchedTokenException)e;
@@ -166,8 +166,6 @@ namespace ExpressionEvaluator.Parser
             }
 
             throw new ExpressionParseException(message, input);
-
-            Console.WriteLine("Error in parser at line " + e.Line + ":" + e.CharPositionInLine);
         }
 
         private Expression GetIdentifier(string identifier)

@@ -3,7 +3,6 @@ using Antlr.Runtime;
 
 namespace ExpressionEvaluator.Parser
 {
-    [Serializable]
     public class ExpressionParseException : Exception
     {
         private ITokenStream _tokenStream;
